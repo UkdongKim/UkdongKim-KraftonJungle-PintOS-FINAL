@@ -28,6 +28,12 @@
    that are ready to run but not actually running. */
 static struct list ready_list;
 
+/* sleep list */
+static struct list sleep_list;
+
+/* team : temp_list : sleep_list -> temp_list -> ready_list */
+static struct list temp_list;
+
 /* Idle thread. */
 static struct thread *idle_thread;
 
@@ -53,7 +59,7 @@ static unsigned thread_ticks;   /* # of timer ticks since last yield. */
    If true, use multi-level feedback queue scheduler.
    Controlled by kernel command-line option "-o mlfqs". */
 bool thread_mlfqs;
-
+bool sleep_less(const struct list_elem *a, const struct list_elem *b, void *aux UNUSED);
 static void kernel_thread (thread_func *, void *aux);
 
 static void idle (void *aux UNUSED);
@@ -109,6 +115,10 @@ thread_init (void) {
 	lock_init (&tid_lock);
 	list_init (&ready_list);
 	list_init (&destruction_req);
+	list_init (&temp_list);
+	list_init (&sleep_list);
+
+
 
 	/* Set up a thread structure for the running thread. */
 	initial_thread = running_thread ();
@@ -309,6 +319,57 @@ thread_yield (void) {
 		list_insert_ordered(&ready_list, &curr->elem, cmp_priority, NULL);
 	do_schedule (THREAD_READY);
 	intr_set_level (old_level);
+}
+
+void
+thread_sleep(int64_t ticks){
+	struct thread *curr = thread_current();
+	enum intr_level old_level;	
+
+	ASSERT(!intr_context());
+
+	old_level = intr_disable();
+	curr->status = THREAD_BLOCKED;
+	curr->wakeup_tick = ticks;
+	
+	if(curr!= idle_thread)
+		list_insert_ordered(&sleep_list, &curr->elem, sleep_less , NULL);	//오름차순으로 정렬
+	schedule();
+	intr_set_level(old_level);
+}
+
+void
+thread_wakeup(int64_t ticks)
+{
+	if(list_empty(&sleep_list))
+		return;
+
+	enum intr_level old_level;
+	
+	//sleep_list의 시작 지점에 대한 iterator를 반환하여 해당 요소를 struct thread로 캐스팅
+	struct thread *sleep_front_thread = list_entry(list_begin(&sleep_list),struct thread, elem);
+	struct thread *sleep_pop_front_thread;
+
+	//깨어야하는 애들 중에서 우선순위가 높은 스레드를 temp_list에 삽입
+	while(sleep_front_thread->wakeup_tick <= ticks)
+	{
+		old_level = intr_disable();
+		sleep_front_thread->status = THREAD_READY;
+		
+		/* alarm clock - priority */
+		sleep_pop_front_thread = list_entry(list_pop_front(&sleep_list), struct thread, elem);
+		list_insert_ordered(&temp_list, &sleep_pop_front_thread->elem , cmp_priority, NULL);
+		
+		sleep_front_thread = list_entry(list_begin(&sleep_list),struct thread, elem);	
+		intr_set_level(old_level);
+	}
+
+	while(!list_empty(&temp_list))
+	{
+		old_level = intr_disable();
+		list_push_back(&ready_list, list_pop_front(&temp_list));
+		intr_set_level(old_level);
+	}
 }
 
 /* Sets the current thread's priority to NEW_PRIORITY. */
@@ -598,4 +659,12 @@ allocate_tid (void) {
 	lock_release (&tid_lock);
 
 	return tid;
+}
+
+//sleep_list에 들어가는 elem을 tick이 짧은 순서대로 오름차순 정렬
+bool
+sleep_less(const struct list_elem *a, const struct list_elem *b, void *aux UNUSED) {
+	struct thread *ta = list_entry(a, struct thread, elem);
+	struct thread *tb = list_entry(b, struct thread, elem);
+	return ta->wakeup_tick < tb->wakeup_tick;
 }
