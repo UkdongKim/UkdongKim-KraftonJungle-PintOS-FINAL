@@ -98,6 +98,11 @@ struct thread {
 	/* Shared between thread.c and synch.c. */
 	struct list_elem elem;              /* List element. */
 
+	int original_priority;				/* 쓰레드 원래의 priority 값 */
+	struct lock *wait_on_lock;			/* 쓰레드가 기다리고 있는 락 */
+	struct list donations;				/* 쓰레드가 기부 받고 있는 쓰레드들 (한단계까지만) */
+	struct list_elem d_elem;			/* donations에 들어가는 자료구조 */
+
 #ifdef USERPROG
 	/* Owned by userprog/process.c. */
 	uint64_t *pml4;                     /* Page map level 4 */
@@ -148,5 +153,8 @@ void do_iret (struct intr_frame *tf);
 
 bool
 cmp_priority(const struct list_elem *a, const struct list_elem *b, void *aux UNUSED);
+
+//donations 리스트에 들어가는 d_elem을 priority 기준으로 정렬(내림차순)
+bool cmp_donor_priority(const struct list_elem *a, const struct list_elem *b, void *aux UNUSED);
 
 #endif /* threads/thread.h */

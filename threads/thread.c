@@ -389,6 +389,14 @@ cmp_priority(const struct list_elem *a, const struct list_elem *b, void *aux UNU
 	return ta->priority > tb->priority;
 }
 
+//donations 리스트에 들어가는 d_elem을 priority 기준으로 정렬(내림차순)
+bool
+cmp_donor_priority(const struct list_elem *a, const struct list_elem *b, void *aux UNUSED) {
+	struct thread *ta = list_entry(a, struct thread, d_elem);
+	struct thread *tb = list_entry(b, struct thread, d_elem);
+	return ta->priority > tb->priority;
+}
+
 /* Returns the current thread's priority. */
 int
 thread_get_priority (void) {
@@ -484,6 +492,12 @@ init_thread (struct thread *t, const char *name, int priority) {
 	t->tf.rsp = (uint64_t) t + PGSIZE - sizeof (void *);
 	t->priority = priority;
 	t->magic = THREAD_MAGIC;
+
+	//최초에 original_priority는 priority와 동일하다.
+	t->original_priority = priority;
+
+	// 기부받는 donations 목록을 초기화 시켜준다.
+	list_init(&t->donations);
 }
 
 /* Chooses and returns the next thread to be scheduled.  Should
