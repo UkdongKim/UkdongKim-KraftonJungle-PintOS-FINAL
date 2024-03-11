@@ -376,8 +376,24 @@ thread_wakeup(int64_t ticks)
 /* Sets the current thread's priority to NEW_PRIORITY. */
 void
 thread_set_priority (int new_priority) {
-	thread_current ()->priority = new_priority;
-	thread_yield(); // 추가. 이유 : 스레드 생성시 우선순위가 높은 경우에는 yield(), 안 높으면 어차피 자기 자신이 schedule()됨
+	/* The main thread acquires a lock.  Then it creates a
+   higher-priority thread that blocks acquiring the lock, causing
+   it to donate their priorities to the main thread.  The main
+   thread attempts to lower its priority, which should not take
+   effect until the donation is released. */
+
+	// original_priority는 반드시 새롭게 설정되는 priority가 들어간다.
+	thread_current ()->original_priority = new_priority;
+
+	// donations가 없을 때에만 priority를 새롭게 설정되는 priority가 들어간다. 이유는 priority_donate-lower 테스트 코드 내 주석 참고!
+	if(list_empty(&thread_current()->donations))
+	{
+		thread_current ()->priority = new_priority;
+	}
+
+	struct thread *head_thread = list_entry(list_begin(&ready_list), struct thread, elem);
+	if(thread_current()->priority < head_thread->priority)	
+		thread_yield(); 
 	
 }
 
