@@ -216,6 +216,7 @@ thread_create (const char *name, int priority,
 
 	/* Add to run queue. */
 	thread_unblock (t);
+	thread_yield(); // 추가. 이유 : 스레드 생성시 우선순위가 높은 경우에는 yield(), 안 높으면 어차피 자기 자신이 schedule()됨
 
 	return tid;
 }
@@ -376,6 +377,8 @@ thread_wakeup(int64_t ticks)
 void
 thread_set_priority (int new_priority) {
 	thread_current ()->priority = new_priority;
+	thread_yield(); // 추가. 이유 : 스레드 생성시 우선순위가 높은 경우에는 yield(), 안 높으면 어차피 자기 자신이 schedule()됨
+	
 }
 
 /* priority 기준으로 내림차순 하기 위함 */
